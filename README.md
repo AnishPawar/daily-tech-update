@@ -135,40 +135,45 @@ summary without re-collecting from any source -- useful right after writing
 a fresh `summary.json` so you don't pay the ~2-minute full-collection cost
 just to pick it up.
 
-**This file is only ever written by the local `daily-tech-news` Claude
-scheduled task**, not by `refresh.py`/`deploy.py` themselves and not by the
-GitHub Actions workflow (which runs unattended -- there's no Claude available
-there to draft the narrative). That means the AI summary only updates on
-days the local scheduled task actually fires; on GitHub-Actions-only days the
-rest of the dashboard stays current but the summary section is unchanged
-from whenever it was last written. The UI shows the summary's age and flags
-it once it's more than ~36 hours old, so this is visible rather than silent.
-No `summary.json` at all (e.g. first run) shows a placeholder explaining why.
+**This file is only ever written by Claude** -- either via the `refresh`
+skill (`.claude/skills/refresh/`, run on demand with `/refresh`) or the local
+`daily-tech-news` scheduled task, both of which run the identical sequence.
+It is never written by `refresh.py`/`deploy.py` themselves, and never by the
+GitHub Actions workflow, which runs unattended with no Claude available to
+draft the narrative. That means the AI summary only updates when a human (or
+the schedule) actually triggers one of those two paths; on GitHub-Actions-only
+refreshes the rest of the dashboard stays current but the summary section is
+unchanged from whenever it was last written. The UI shows the summary's
+generation timestamp right in its heading and flags it once it's more than
+~36 hours old, so this is visible rather than silent. No `summary.json` at
+all (e.g. first run) shows a placeholder explaining why.
 
 Because this genuinely requires an LLM to write, and this project intentionally
 has no Anthropic API key wired in (see the Hosting section), there is no
-automated path to keep it fresh independent of the local scheduled task
-without adding one.
+automated path to keep it fresh independent of a Claude session actually
+running the refresh skill or scheduled task.
 
 ## Hosting and automatic refresh
 
 Published at **https://anishpawar.github.io/daily-tech-update/** via GitHub
 Pages, serving `index.html` from the `main` branch root.
 
-Two independent things can trigger a refresh, and both just run
-`refresh.py` then `deploy.py`:
+Three independent things can trigger a refresh:
 
 1. **`.github/workflows/refresh.yml`** -- runs on GitHub's own servers, on a
    daily schedule (`cron: "31 2 * * *"`, ~08:01 IST) and on-demand via
-   `workflow_dispatch`. Uses the repo's built-in `GITHUB_TOKEN` to push, so
-   no secrets need managing. This is what makes the dashboard self-updating
-   independent of this Mac being on or any local automation running.
-2. The **Refresh button** in the page header (top right) opens this
-   workflow's GitHub Actions page in a new tab, where clicking "Run
-   workflow" (as the signed-in repo owner) triggers an immediate run. The
-   button is a deep link, not an in-page API call -- deliberately, so no
-   credentials ever need to touch this publicly-visible page.
-3. A local Claude Code scheduled task can also run the same two scripts
-   directly on this Mac, if configured -- redundant with (1) but harmless;
-   `deploy.py`'s fast-forward step keeps the two from stepping on each
-   other.
+   `workflow_dispatch` (trigger it from the repo's Actions tab on GitHub, or
+   `gh workflow run refresh.yml`). Uses the repo's built-in `GITHUB_TOKEN` to
+   push, so no secrets need managing. Runs `refresh.py` then `deploy.py` --
+   content only, no AI summary (see above). This is what makes the dashboard
+   self-updating independent of this Mac being on or any local automation
+   running.
+2. The **`refresh` skill** (`.claude/skills/refresh/SKILL.md`) -- run
+   on-demand with `/refresh` in a Claude Code session in this project. Runs
+   the full pipeline including the AI summary (`refresh.py` → write
+   `summary.json` → `refresh.py --render-only` → `deploy.py`).
+3. The local **`daily-tech-news` Claude scheduled task** runs the identical
+   sequence as the `refresh` skill, automatically, on this Mac -- redundant
+   with (1) for the content but the only automated path that also refreshes
+   the AI summary. `deploy.py`'s fast-forward step keeps all three from
+   stepping on each other.

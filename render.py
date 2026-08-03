@@ -150,22 +150,7 @@ header.top {
 }
 header.top h1 { font-size: 1.5rem; margin: 0; }
 header.top .subtitle { color: var(--muted); font-size: 0.85rem; }
-header.top .top-right { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
-.refresh-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  border: 1px solid var(--border);
-  background: var(--panel);
-  color: var(--text);
-  padding: 6px 12px;
-  border-radius: 8px;
-  font-size: 0.82rem;
-  font-weight: 500;
-  text-decoration: none;
-  box-shadow: var(--shadow);
-}
-.refresh-btn:hover { border-color: var(--accent); color: var(--accent); }
+header.top .timestamp { color: var(--muted); font-size: 0.85rem; font-weight: 600; }
 
 /* AI summary */
 .ai-summary {
@@ -176,12 +161,20 @@ header.top .top-right { display: flex; flex-direction: column; align-items: flex
   margin-bottom: 22px;
   box-shadow: var(--shadow);
 }
+.ai-summary .heading-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px 14px;
+  margin-bottom: 10px;
+}
 .ai-summary h2 {
   font-size: 0.85rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--muted);
-  margin: 0 0 10px;
+  margin: 0;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -195,6 +188,12 @@ header.top .top-right { display: flex; flex-direction: column; align-items: flex
   text-transform: none;
   padding: 2px 8px;
   border-radius: 999px;
+}
+.ai-summary .timestamp {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
 }
 .ai-summary p { margin: 0 0 10px; font-size: 0.92rem; line-height: 1.55; }
 .ai-summary p:last-child { margin-bottom: 0; }
@@ -397,10 +396,7 @@ kbd {
       <h1>Daily Tech News Dashboard</h1>
       <div class="subtitle">AI &amp; tech news, ranked across research, agentic AI, and innovation</div>
     </div>
-    <div class="top-right">
-      <a class="refresh-btn" href="https://github.com/AnishPawar/daily-tech-update/actions/workflows/refresh.yml" target="_blank" rel="noopener noreferrer" title="Opens this dashboard's GitHub Actions workflow -- click &quot;Run workflow&quot; there to refresh now">&#8635; Refresh</a>
-      <div class="subtitle">Generated __GENERATED_AT_HUMAN__ &middot; __OK_COUNT__/__TOTAL_SOURCES__ sources healthy</div>
-    </div>
+    <div class="timestamp">Generated __GENERATED_AT_HUMAN__ &middot; __OK_COUNT__/__TOTAL_SOURCES__ sources healthy</div>
   </header>
 
   <section class="ai-summary" id="ai-summary"></section>
@@ -516,25 +512,33 @@ kbd {
 
   function renderSummary() {
     var el = document.getElementById("ai-summary");
+    var heading = '<div class="heading-row"><h2>Today\'s AI Summary <span class="badge-ai">AI</span></h2>';
+
     if (!SUMMARY || !SUMMARY.text) {
       el.innerHTML =
-        '<h2>Today\'s AI Summary <span class="badge-ai">AI</span></h2>' +
-        '<div class="empty-note">Not generated yet -- this is written by Claude as part of the daily scheduled task ' +
-        '(only runs when that task fires, so it can lag behind the deterministic dashboard below).</div>';
+        heading + "</div>" +
+        '<div class="empty-note">Not generated yet -- this is written by Claude when the refresh skill or the daily ' +
+        'scheduled task runs (not by the automated GitHub Actions refresh), so it can lag behind the deterministic dashboard below.</div>';
       return;
     }
-    var paragraphs = String(SUMMARY.text).split(/\n\s*\n/).filter(function (p) { return p.trim(); });
-    var html = '<h2>Today\'s AI Summary <span class="badge-ai">AI</span></h2>';
-    html += paragraphs.map(function (p) { return "<p>" + escapeHtml(p.trim()) + "</p>"; }).join("");
 
     var genAt = SUMMARY.generated_at ? new Date(SUMMARY.generated_at) : null;
-    if (genAt && !isNaN(genAt.getTime())) {
+    var genAtValid = genAt && !isNaN(genAt.getTime());
+    var whenText = genAtValid
+      ? genAt.toLocaleString(undefined, { year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
+      : "";
+    if (genAtValid) {
+      heading += '<span class="timestamp">Generated ' + whenText + '</span>';
+    }
+    heading += "</div>";
+
+    var paragraphs = String(SUMMARY.text).split(/\n\s*\n/).filter(function (p) { return p.trim(); });
+    var html = heading + paragraphs.map(function (p) { return "<p>" + escapeHtml(p.trim()) + "</p>"; }).join("");
+
+    if (genAtValid) {
       var ageHours = (Date.now() - genAt.getTime()) / 3600000;
-      var whenText = genAt.toLocaleString(undefined, { year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
       if (ageHours > 36) {
-        html += '<div class="stale-note">Written ' + whenText + ' -- more than a day ago. The AI summary only refreshes when the local scheduled task runs; the dashboard below is still current.</div>';
-      } else {
-        html += '<div class="stale-note">Written ' + whenText + '</div>';
+        html += '<div class="stale-note">This is more than a day old -- the AI summary only refreshes when the refresh skill or the daily scheduled task runs; the dashboard below is still current.</div>';
       }
     }
     el.innerHTML = html;
