@@ -149,6 +149,22 @@ header.top {
 }
 header.top h1 { font-size: 1.5rem; margin: 0; }
 header.top .subtitle { color: var(--muted); font-size: 0.85rem; }
+header.top .top-right { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.refresh-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  text-decoration: none;
+  box-shadow: var(--shadow);
+}
+.refresh-btn:hover { border-color: var(--accent); color: var(--accent); }
 
 /* Hero strip */
 .hero { margin-bottom: 26px; }
@@ -343,7 +359,10 @@ kbd {
       <h1>Daily Tech News Dashboard</h1>
       <div class="subtitle">AI &amp; tech news, ranked across research, agentic AI, and innovation</div>
     </div>
-    <div class="subtitle">Generated __GENERATED_AT_HUMAN__ &middot; __OK_COUNT__/__TOTAL_SOURCES__ sources healthy</div>
+    <div class="top-right">
+      <a class="refresh-btn" href="https://github.com/AnishPawar/daily-tech-update/actions/workflows/refresh.yml" target="_blank" rel="noopener noreferrer" title="Opens this dashboard's GitHub Actions workflow -- click &quot;Run workflow&quot; there to refresh now">&#8635; Refresh</a>
+      <div class="subtitle">Generated __GENERATED_AT_HUMAN__ &middot; __OK_COUNT__/__TOTAL_SOURCES__ sources healthy</div>
+    </div>
   </header>
 
   <section class="hero">

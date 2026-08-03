@@ -1,0 +1,31 @@
+name: Refresh dashboard
+
+on:
+  schedule:
+    # ~08:01 IST daily (matches the local schedule this replaces)
+    - cron: "31 2 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: refresh-dashboard
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Refresh data
+        run: python3 refresh.py
+
+      - name: Deploy
+        run: python3 deploy.py
