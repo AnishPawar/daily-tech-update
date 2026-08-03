@@ -1,7 +1,11 @@
 """
 Orchestrator for the Daily Tech News Dashboard.
 
-    python3 refresh.py
+    python3 refresh.py               # collect, score, render (full run)
+    python3 refresh.py --render-only # re-render from the existing store,
+                                      # no network calls -- used after writing
+                                      # a fresh summary.json so the page picks
+                                      # it up without a full re-collect
 
 Collects from every source in sources.py, merges new items into
 data/store.json (keyed by item id so re-running is idempotent), rolls off
@@ -10,10 +14,15 @@ full store, renders dashboard.html, and writes data/health.json. Both
 data/store.json and dashboard.html are written atomically (write to a .tmp
 sibling, then os.replace()) so a crash mid-run never leaves a half-written
 file. Prints a per-source summary table to stdout.
+
+If summary.json exists at the repo root, its contents are embedded in the
+rendered page as the AI-written daily summary -- see README.md for the
+schema and how it gets written.
 """
 
 import json
 import os
+import sys
 from datetime import datetime, timedelta, timezone
 
 import collect
@@ -26,6 +35,7 @@ DATA_DIR = os.path.join(BASE_DIR, "data")
 STORE_PATH = os.path.join(DATA_DIR, "store.json")
 HEALTH_PATH = os.path.join(DATA_DIR, "health.json")
 DASHBOARD_PATH = os.path.join(BASE_DIR, "dashboard.html")
+SUMMARY_PATH = os.path.join(BASE_DIR, "summary.json")
 
 ROLLOFF_DAYS = 100
 
@@ -57,6 +67,26 @@ def _load_store():
         return {}
     try:
         with open(STORE_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def _load_summary():
+    if not os.path.exists(SUMMARY_PATH):
+        return None
+    try:
+        with open(SUMMARY_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return None
+
+
+def _load_health():
+    if not os.path.exists(HEALTH_PATH):
+        return {}
+    try:
+        with open(HEALTH_PATH, "r", encoding="utf-8") as f:
             return json.load(f)
     except Exception:
         return {}
@@ -130,9 +160,35 @@ def merge_store(store, raw_items, now):
 # Main
 # ---------------------------------------------------------------------------
 
+def _render_from_store(now, health_out):
+    """Shared tail end of both run modes: load the store, dedupe/classify/
+    score it, load summary.json if present, and render dashboard.html."""
+    store = _load_store()
+    items = [_store_entry_to_item(e) for e in store.values()]
+    items = score.dedupe(items)
+    for it in items:
+        it["categories"] = score.classify(it)
+        it["score_daily"] = score.score(it, now, use_recency=True)
+        it["score_significance"] = score.score(it, now, use_recency=False)
+
+    summary = _load_summary()
+    html = render.render(items, health_out, generated_at=now, summary=summary)
+    _atomic_write_text(DASHBOARD_PATH, html)
+    return items
+
+
 def main():
     os.makedirs(DATA_DIR, exist_ok=True)
     now = datetime.now(timezone.utc)
+    render_only = "--render-only" in sys.argv[1:]
+
+    if render_only:
+        print("Render-only mode: skipping collection, re-rendering from the existing store.\n")
+        health_out = _load_health()
+        items = _render_from_store(now, health_out)
+        print(f"Rendered {DASHBOARD_PATH} with {len(items)} deduped/scored items")
+        return
+
     all_sources = sources.all_sources()
 
     print(f"Collecting from {len(all_sources)} sources...")
@@ -148,15 +204,7 @@ def main():
     health_out = {name: dict(h) for name, h in health.items()}
     _atomic_write_json(HEALTH_PATH, health_out)
 
-    items = [_store_entry_to_item(e) for e in store.values()]
-    items = score.dedupe(items)
-    for it in items:
-        it["categories"] = score.classify(it)
-        it["score_daily"] = score.score(it, now, use_recency=True)
-        it["score_significance"] = score.score(it, now, use_recency=False)
-
-    html = render.render(items, health_out, generated_at=now)
-    _atomic_write_text(DASHBOARD_PATH, html)
+    items = _render_from_store(now, health_out)
 
     # --- per-source summary table -------------------------------------
     print(f"{'SOURCE':<42} {'OK':>4} {'COUNT':>6}  ERROR")

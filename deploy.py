@@ -20,6 +20,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 DASHBOARD = ROOT / "dashboard.html"
 INDEX = ROOT / "index.html"
+SUMMARY = ROOT / "summary.json"
 
 
 def run(*args, check=True):
@@ -41,8 +42,12 @@ def main() -> int:
 
     shutil.copyfile(DASHBOARD, INDEX)
 
-    run("git", "add", "index.html")
-    status = run("git", "status", "--porcelain", "--", "index.html")
+    tracked = ["index.html"]
+    if SUMMARY.exists():
+        tracked.append("summary.json")
+
+    run("git", "add", *tracked)
+    status = run("git", "status", "--porcelain", "--", *tracked)
     if not status.stdout.strip():
         print("deploy.py: no changes to publish, skipping commit/push")
         return 0

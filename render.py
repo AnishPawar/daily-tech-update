@@ -48,7 +48,7 @@ def _serialize_item(it):
     }
 
 
-def render(items, health, generated_at=None):
+def render(items, health, generated_at=None, summary=None):
     if generated_at is None:
         generated_at = datetime.now(timezone.utc)
 
@@ -56,6 +56,7 @@ def render(items, health, generated_at=None):
         "generated_at": _iso(generated_at),
         "items": [_serialize_item(it) for it in items],
         "health": health or {},
+        "summary": summary or None,
     }
 
     failed_sources = sorted(name for name, h in (health or {}).items() if not h.get("ok"))
@@ -165,6 +166,43 @@ header.top .top-right { display: flex; flex-direction: column; align-items: flex
   box-shadow: var(--shadow);
 }
 .refresh-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+/* AI summary */
+.ai-summary {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 18px;
+  margin-bottom: 22px;
+  box-shadow: var(--shadow);
+}
+.ai-summary h2 {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin: 0 0 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ai-summary .badge-ai {
+  background: var(--accent-bg);
+  color: var(--accent);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+.ai-summary p { margin: 0 0 10px; font-size: 0.92rem; line-height: 1.55; }
+.ai-summary p:last-child { margin-bottom: 0; }
+.ai-summary .stale-note, .ai-summary .empty-note {
+  color: var(--muted);
+  font-size: 0.78rem;
+  margin-top: 10px;
+}
 
 /* Hero strip */
 .hero { margin-bottom: 26px; }
@@ -365,6 +403,8 @@ kbd {
     </div>
   </header>
 
+  <section class="ai-summary" id="ai-summary"></section>
+
   <section class="hero">
     <h2>Today's Top Stories</h2>
     <div class="hero-grid" id="hero-grid"></div>
@@ -414,6 +454,7 @@ kbd {
   "use strict";
   var payload = JSON.parse(document.getElementById("feed-data").textContent);
   var ITEMS = payload.items || [];
+  var SUMMARY = payload.summary || null;
   var CAT_LABELS = { innovation: "AI & Tech Innovation", papers: "Papers", agentic: "Agentic AI" };
 
   var state = { range: 1, category: "all", sources: new Set(), search: "" };
@@ -471,6 +512,32 @@ kbd {
         (summary ? '<div class="summary">' + summary + "</div>" : "") +
       "</article>"
     );
+  }
+
+  function renderSummary() {
+    var el = document.getElementById("ai-summary");
+    if (!SUMMARY || !SUMMARY.text) {
+      el.innerHTML =
+        '<h2>Today\'s AI Summary <span class="badge-ai">AI</span></h2>' +
+        '<div class="empty-note">Not generated yet -- this is written by Claude as part of the daily scheduled task ' +
+        '(only runs when that task fires, so it can lag behind the deterministic dashboard below).</div>';
+      return;
+    }
+    var paragraphs = String(SUMMARY.text).split(/\n\s*\n/).filter(function (p) { return p.trim(); });
+    var html = '<h2>Today\'s AI Summary <span class="badge-ai">AI</span></h2>';
+    html += paragraphs.map(function (p) { return "<p>" + escapeHtml(p.trim()) + "</p>"; }).join("");
+
+    var genAt = SUMMARY.generated_at ? new Date(SUMMARY.generated_at) : null;
+    if (genAt && !isNaN(genAt.getTime())) {
+      var ageHours = (Date.now() - genAt.getTime()) / 3600000;
+      var whenText = genAt.toLocaleString(undefined, { year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+      if (ageHours > 36) {
+        html += '<div class="stale-note">Written ' + whenText + ' -- more than a day ago. The AI summary only refreshes when the local scheduled task runs; the dashboard below is still current.</div>';
+      } else {
+        html += '<div class="stale-note">Written ' + whenText + '</div>';
+      }
+    }
+    el.innerHTML = html;
   }
 
   function renderHero() {
@@ -584,6 +651,7 @@ kbd {
     }
   });
 
+  renderSummary();
   renderHero();
   renderSourceChips();
   renderResults();
