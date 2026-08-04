@@ -24,6 +24,20 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
+      # data/ is gitignored (never committed), so without this every run would
+      # start from an empty store and silently reset the accumulated RSS/press
+      # history back to "whatever's live right now". Restores the previous
+      # run's data/, and always saves a fresh copy under a new run-scoped key
+      # at the end of the job (the unmatched key on restore is what makes the
+      # save step below actually persist something new instead of no-op'ing).
+      - name: Restore data cache
+        uses: actions/cache@v4
+        with:
+          path: data
+          key: dashboard-data-${{ github.run_id }}
+          restore-keys: |
+            dashboard-data-
+
       - name: Refresh data
         run: python3 refresh.py
 
