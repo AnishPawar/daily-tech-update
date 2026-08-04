@@ -90,10 +90,12 @@ RSS/Atom feeds only expose their most recent entries (no historical
 date-range query support), so on a fresh checkout the 3-month press-coverage
 picture is thin -- it only has whatever each feed happened to be showing at
 first-run time. It fills in properly as `refresh.py` is run daily and each
-day's items accumulate in `data/store.json`. arXiv and Hugging Face daily
-papers, and Hacker News, don't have this problem -- their APIs support real
-date-range/day-by-day queries, so those three sources are backfilled with
-genuine 100-day depth from the very first run. The dashboard's 3-month tab
+day's items accumulate in `data/store.json` -- this now holds on GitHub
+Actions too (see "Persisting `data/` across Actions runs" below), not just
+locally. arXiv and Hugging Face daily papers, and Hacker News, don't have
+this problem -- their APIs support real date-range/day-by-day queries, so
+those three sources are backfilled with genuine 100-day depth from the very
+first run. The dashboard's 3-month tab
 shows a note about this in the UI.
 
 ## Files
@@ -177,3 +179,22 @@ Three independent things can trigger a refresh:
    with (1) for the content but the only automated path that also refreshes
    the AI summary. `deploy.py`'s fast-forward step keeps all three from
    stepping on each other.
+
+### Persisting `data/` across Actions runs
+
+`data/` is gitignored (see "Files" above), so `.github/workflows/refresh.yml`
+uses `actions/cache` to restore it before `refresh.py` runs and save it again
+afterward -- without this, every Actions run would start from a completely
+empty store (`data/` doesn't exist in a fresh checkout) and silently reset
+the accumulated RSS/press history back to just whatever each feed happens to
+be showing at that instant, undoing what earlier runs had built up. Verified
+with two consecutive live runs: the first showed `Cache not found` and
+`Store: 0 items -> 3466 items`; the second showed `Cache hit for
+restore-key: dashboard-data-<run-id>` and `Store: 3466 items -> 3468 items`
+-- confirming it actually accumulates now instead of resetting.
+
+The cache key is `dashboard-data-${{ github.run_id }}` (always unique, so the
+save step always succeeds) with `restore-keys: dashboard-data-` as a prefix
+fallback (so restore picks up the most recent previous run's cache). GitHub
+evicts cache entries unused for 7+ days, which is a non-issue at the current
+daily cadence.
